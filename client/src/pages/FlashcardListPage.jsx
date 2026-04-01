@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import FilterBar from '../components/FilterBar';
 import { deleteFlashcard, getFlashcards } from '../services/flashcardService';
+import { useAuth } from '../context/AuthContext';
 
 const initialFilters = {
   language: '',
@@ -10,6 +11,7 @@ const initialFilters = {
 };
 
 function FlashcardListPage() {
+  const { isAdmin } = useAuth();
   const [flashcards, setFlashcards] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
 
@@ -86,14 +88,16 @@ function FlashcardListPage() {
               <strong>Review Count:</strong> {card.reviewCount ?? 0}
             </p>
 
-            <div className="action-row">
-              <Link className="button-link" to={`/edit/${card._id}`}>
-                Edit
-              </Link>
-              <button type="button" onClick={() => handleDelete(card._id)} className="danger-button">
-                Delete
-              </button>
-            </div>
+            {isAdmin && (
+              <div className="action-row">
+                <Link className="button-link" to={`/edit/${card._id}`}>
+                  Edit
+                </Link>
+                <button type="button" onClick={() => handleDelete(card._id)} className="danger-button">
+                  Delete
+                </button>
+              </div>
+            )}
           </article>
         ))}
       </div>

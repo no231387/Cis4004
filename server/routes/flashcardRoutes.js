@@ -1,4 +1,5 @@
 const express = require('express');
+const { protect, requireAdmin } = require('../middleware/authMiddleware');
 const {
   getFlashcards,
   getFlashcardById,
@@ -13,10 +14,12 @@ const {
 
 const router = express.Router();
 
+router.use(protect);
+
 router.get('/stats', getDashboardStats);
-router.post('/import', bulkImportFlashcards);
-router.route('/').get(getFlashcards).post(createFlashcard);
-router.route('/:id').get(getFlashcardById).put(updateFlashcard).delete(deleteFlashcard);
+router.post('/import', requireAdmin, bulkImportFlashcards);
+router.route('/').get(getFlashcards).post(requireAdmin, createFlashcard);
+router.route('/:id').get(getFlashcardById).put(requireAdmin, updateFlashcard).delete(requireAdmin, deleteFlashcard);
 router.patch('/:id/proficiency', updateProficiency);
 router.patch('/:id/review', reviewFlashcard);
 

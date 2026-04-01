@@ -28,6 +28,7 @@ body {
   gap: 0.75rem;
   flex-wrap: wrap;
   margin-bottom: 1rem;
+  align-items: center;
 }
 
 .nav-bar a {
@@ -178,5 +179,15 @@ select {
 
 .muted-text {
   color: #4b5563;
+  margin: 0;
+}
+
+.auth-card {
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.error-text {
+  color: #b91c1c;
   margin: 0;
 }

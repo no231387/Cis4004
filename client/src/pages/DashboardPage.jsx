@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getDashboardStats } from '../services/flashcardService';
+import { useAuth } from '../context/AuthContext';
 
 function DashboardPage() {
+  const { isAdmin, user } = useAuth();
   const [stats, setStats] = useState({ total: 0, mastered: 0, newCards: 0, dueToday: 0 });
 
   useEffect(() => {
@@ -23,6 +25,10 @@ function DashboardPage() {
       <div className="card">
         <h2>Welcome to LinguaCards</h2>
         <p>Use this app to create language flashcards, track proficiency, and keep up with your daily reviews.</p>
+        <p>
+          Current access: <strong>{user?.role}</strong>
+          {isAdmin ? ' users can manage flashcards and imports.' : ' users can review and browse flashcards.'}
+        </p>
       </div>
 
       <div className="stats-grid">
@@ -45,8 +51,8 @@ function DashboardPage() {
       </div>
 
       <div className="card quick-links">
-        <Link to="/add">Add a new flashcard</Link>
-        <Link to="/import">Import flashcards</Link>
+        {isAdmin && <Link to="/add">Add a new flashcard</Link>}
+        {isAdmin && <Link to="/import">Import flashcards</Link>}
         <Link to="/flashcards">View all flashcards</Link>
         <Link to="/study">Start studying</Link>
       </div>
