@@ -1,114 +1,169 @@
-# LinguaCards - MERN Flashcard Learning App
+# LinguaCards
 
-## Project Description
-LinguaCards is a beginner-friendly full-stack MERN web application for language vocabulary practice. Users can create, read, update, delete, filter, and study flashcards with simple proficiency tracking.
+LinguaCards is a beginner-friendly MERN flashcard app for language learning. It includes authentication, role-based access control, decks, official beginner decks, CSV import, tags, study sessions, and flashcard study/review tools.
 
-## Features
-- Full CRUD for flashcards
-- Flashcard fields:
-  - word or phrase
-  - translation
-  - language
-  - category/topic
-  - example sentence
-  - proficiency level (1-5)
-  - date created
-- Study mode:
-  - One flashcard at a time
-  - Reveal translation
-  - Rate knowledge (1-5)
-  - Simple proficiency update formula
-- Filtering by language, category, and proficiency
-- React single-page navigation with React Router
-
-## Technologies Used
-- **MongoDB** + Mongoose
-- **Express.js**
-- **React** (Vite)
-- **Node.js**
-- Axios for API requests
+## Current Features
+- Registration and login with JWT authentication
+- Admin and standard user roles
+- Flashcard CRUD with ownership rules
+- Deck management
+- Official Beginner Decks for admin-managed shared content
+- CSV and tab-separated flashcard import with preview and validation
+- Tag support
+- Study sessions with saved session summaries
+- Proficiency tracking and reset actions
+- Dark mode toggle
 
 ## Folder Structure
 ```text
-Cis4004/
-├── client/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   ├── App.jsx
-│   │   ├── main.jsx
-│   │   └── styles.css
-│   ├── .env.example
-│   ├── index.html
-│   ├── package.json
-│   └── vite.config.js
-├── server/
-│   ├── config/
-│   ├── controllers/
-│   ├── models/
-│   ├── routes/
-│   ├── seed/
-│   ├── .env.example
-│   ├── package.json
-│   └── server.js
-└── README.md
+Cis4004-main/
+|-- client/
+|   |-- src/
+|   |   |-- components/
+|   |   |   |-- FilterBar.jsx
+|   |   |   |-- FlashcardForm.jsx
+|   |   |   `-- ProtectedRoute.jsx
+|   |   |-- context/
+|   |   |   `-- AuthContext.jsx
+|   |   |-- pages/
+|   |   |   |-- AddFlashcardPage.jsx
+|   |   |   |-- DashboardPage.jsx
+|   |   |   |-- DecksPage.jsx
+|   |   |   |-- EditFlashcardPage.jsx
+|   |   |   |-- FlashcardListPage.jsx
+|   |   |   |-- ImportFlashcardsPage.jsx
+|   |   |   |-- LoginPage.jsx
+|   |   |   |-- OfficialBeginnerDecksPage.jsx
+|   |   |   |-- RegisterPage.jsx
+|   |   |   |-- StudySessionPage.jsx
+|   |   |   `-- UnauthorizedPage.jsx
+|   |   |-- services/
+|   |   |   `-- flashcardService.js
+|   |   |-- utils/
+|   |   |   `-- importUtils.js
+|   |   |-- App.jsx
+|   |   |-- main.jsx
+|   |   `-- styles.css
+|   |-- .env
+|   |-- index.html
+|   |-- package.json
+|   `-- vite.config.js
+|-- server/
+|   |-- config/
+|   |   `-- db.js
+|   |-- controllers/
+|   |   |-- authController.js
+|   |   |-- deckController.js
+|   |   |-- flashcardController.js
+|   |   |-- studySessionController.js
+|   |   `-- tagController.js
+|   |-- middleware/
+|   |   `-- authMiddleware.js
+|   |-- models/
+|   |   |-- Deck.js
+|   |   |-- Flashcard.js
+|   |   |-- StudySession.js
+|   |   |-- Tag.js
+|   |   `-- User.js
+|   |-- routes/
+|   |   |-- authRoutes.js
+|   |   |-- deckRoutes.js
+|   |   |-- flashcardRoutes.js
+|   |   |-- studySessionRoutes.js
+|   |   `-- tagRoutes.js
+|   |-- seed/
+|   |   `-- seedFlashcards.js
+|   |-- .env
+|   |-- package.json
+|   `-- server.js
+|-- .gitignore
+`-- README.md
 ```
 
 ## Setup Instructions
-### 1) Clone and install dependencies
+
+### 1. Clone the repo
 ```bash
-# in project root
-cd server && npm install
-cd ../client && npm install
+git clone https://github.com/no231387/Cis4004.git
+cd Cis4004
 ```
 
-### 2) Configure environment variables
-Create `.env` files from examples:
-
+### 2. Install dependencies
 ```bash
-# server/.env
+cd server
+npm install
+
+cd ../client
+npm install
+```
+
+### 3. Configure environment variables
+
+Create or update these files:
+
+`server/.env`
+```env
 PORT=5000
 MONGODB_URI=mongodb://127.0.0.1:27017/language_flashcards
+JWT_SECRET=your_jwt_secret_here
+```
 
-# client/.env
+`client/.env`
+```env
 VITE_API_BASE_URL=http://localhost:5000/api
 ```
 
-### 3) Run MongoDB
-Make sure your MongoDB server is running locally
+Notes:
+- `JWT_SECRET` is strongly recommended for auth.
+- If you use MongoDB Atlas instead of local MongoDB, replace `MONGODB_URI` with your Atlas connection string.
 
-### 4) Seed sample data (optional)
-```bash
-cd server
-npm run seed
-```
+### 4. Start MongoDB
+Make sure MongoDB is running before starting the backend.
 
-### 5) Run the backend server
+### 5. Start the backend
 ```bash
 cd server
 npm run dev
 ```
 
-### 6) Run the frontend client
+### 6. Start the frontend
 ```bash
 cd client
 npm run dev
 ```
 
-### 7) Open the app
-Vite will show a local URL (typically `http://localhost:5173`).
+### 7. Open the app
+Open the Vite URL shown in the terminal, usually:
 
-## API Overview
+```text
+http://localhost:5173
+```
+
+## Optional: Seed Sample Data
+```bash
+cd server
+npm run seed
+```
+
+## Main API Areas
+- `POST /api/auth/register`
+- `POST /api/auth/login`
+- `GET /api/auth/me`
 - `GET /api/flashcards`
-- `GET /api/flashcards/:id`
-- `POST /api/flashcards`
-- `PUT /api/flashcards/:id`
-- `DELETE /api/flashcards/:id`
-- `PATCH /api/flashcards/:id/proficiency`
+- `POST /api/flashcards/import`
+- `GET /api/decks`
+- `GET /api/decks/official-beginner`
+- `GET /api/tags`
+- `GET /api/study-sessions`
 
-## Notes for Assignment Demo
-- Demonstrates complete MERN CRUD architecture
-- Includes separated client/server structure
-- Uses reusable React components and route-based pages
-- Keeps logic simple and easy to explain
+## Local Run Checklist
+1. MongoDB is running
+2. `server/.env` is set
+3. `client/.env` is set
+4. Backend is running on port `5000`
+5. Frontend is running on Vite
+
+## Notes
+- GitHub Pages cannot run the full MERN app because the backend and database still need a separate host.
+- Standard users manage their own content.
+- Admin users can manage official decks and broader system content.
