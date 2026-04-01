@@ -25,6 +25,7 @@ exports.registerUser = async (req, res) => {
   try {
     const username = String(req.body.username || '').trim();
     const password = String(req.body.password || '');
+    const requestedAdminAccess = Boolean(req.body.isAdmin);
 
     if (!username || !password) {
       return res.status(400).json({ message: 'Username and password are required.' });
@@ -40,13 +41,12 @@ exports.registerUser = async (req, res) => {
       return res.status(400).json({ message: 'That username is already taken.' });
     }
 
-    const userCount = await User.countDocuments();
     const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
 
     const user = await User.create({
       username,
       passwordHash,
-      role: userCount === 0 ? 'admin' : 'standard'
+      role: requestedAdminAccess ? 'admin' : 'standard'
     });
 
     res.status(201).json(buildAuthResponse(user));

@@ -12,6 +12,16 @@ const flashcardSchema = new mongoose.Schema(
       required: [true, 'Translation is required'],
       trim: true
     },
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'Owner is required']
+    },
+    deck: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Deck',
+      default: null
+    },
     language: {
       type: String,
       required: [true, 'Language is required'],
@@ -22,6 +32,12 @@ const flashcardSchema = new mongoose.Schema(
       default: 'General',
       trim: true
     },
+    tags: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Tag'
+      }
+    ],
     exampleSentence: {
       type: String,
       default: '',
@@ -32,20 +48,6 @@ const flashcardSchema = new mongoose.Schema(
       min: 1,
       max: 5,
       default: 1
-    },
-    nextReviewDate: {
-      type: Date,
-      default: null
-    },
-    interval: {
-      type: Number,
-      min: 0,
-      default: 0
-    },
-    easeFactor: {
-      type: Number,
-      min: 1.3,
-      default: 2.5
     },
     reviewCount: {
       type: Number,

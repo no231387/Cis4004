@@ -4,6 +4,9 @@ const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 const flashcardRoutes = require('./routes/flashcardRoutes');
 const authRoutes = require('./routes/authRoutes');
+const deckRoutes = require('./routes/deckRoutes');
+const tagRoutes = require('./routes/tagRoutes');
+const studySessionRoutes = require('./routes/studySessionRoutes');
 
 dotenv.config();
 connectDB();
@@ -19,6 +22,9 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/flashcards', flashcardRoutes);
+app.use('/api/decks', deckRoutes);
+app.use('/api/tags', tagRoutes);
+app.use('/api/study-sessions', studySessionRoutes);
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found.' });

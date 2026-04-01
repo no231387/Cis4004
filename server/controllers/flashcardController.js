@@ -1,30 +1,14 @@
 const Flashcard = require('../models/Flashcard');
+const Deck = require('../models/Deck');
+const Tag = require('../models/Tag');
 
-const MIN_EASE_FACTOR = 1.3;
 const REVIEW_RATINGS = new Set(['again', 'good', 'easy']);
 const DUPLICATE_OPTIONS = new Set(['skip', 'import_anyway', 'update_existing']);
-
-const getStartOfTomorrow = () => {
-  const tomorrow = new Date();
-  tomorrow.setHours(0, 0, 0, 0);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  return tomorrow;
-};
-
-const getDueFilter = (cutoffDate = new Date()) => ({
-  $or: [
-    { reviewCount: 0 },
-    { nextReviewDate: null },
-    { nextReviewDate: { $lte: cutoffDate } }
-  ]
-});
-
-const calculateNextReviewDate = (daysUntilReview) => {
-  const nextReviewDate = new Date();
-  nextReviewDate.setHours(0, 0, 0, 0);
-  nextReviewDate.setDate(nextReviewDate.getDate() + daysUntilReview);
-  return nextReviewDate;
-};
+const FLASHCARD_POPULATION = [
+  { path: 'owner', select: 'username role' },
+  { path: 'deck', select: 'name language description' },
+  { path: 'tags', select: 'name' }
+];
 
 const updateProficiencyFromReview = (currentProficiency, rating) => {
   if (rating === 'again') {
@@ -39,62 +23,180 @@ const updateProficiencyFromReview = (currentProficiency, rating) => {
 };
 
 const applyReviewRating = (flashcard, rating) => {
-  let interval = flashcard.interval || 0;
-  let easeFactor = flashcard.easeFactor || 2.5;
   const reviewCount = flashcard.reviewCount || 0;
-
-  if (rating === 'again') {
-    interval = 1;
-    easeFactor = Math.max(MIN_EASE_FACTOR, easeFactor - 0.2);
-  } else if (rating === 'good') {
-    interval = interval <= 0 ? 1 : Math.max(1, Math.round(interval * easeFactor));
-  } else {
-    interval = interval <= 0 ? 3 : Math.max(interval + 1, Math.round(interval * (easeFactor + 0.15)));
-    easeFactor += 0.15;
-  }
-
-  flashcard.interval = interval;
-  flashcard.easeFactor = Number(easeFactor.toFixed(2));
   flashcard.reviewCount = reviewCount + 1;
-  flashcard.nextReviewDate = calculateNextReviewDate(interval);
   flashcard.proficiency = updateProficiencyFromReview(flashcard.proficiency, rating);
 };
 
-const buildFilters = ({ language, category, proficiency, due }) => {
-  const filters = {};
-
-  if (language) filters.language = language;
-  if (category) filters.category = category;
-  if (proficiency) filters.proficiency = Number(proficiency);
-  if (due === 'true') filters.$and = [getDueFilter()];
-
-  return filters;
-};
-
 const normalizeText = (value) => String(value || '').trim();
+
+const parseTagNames = (value) => {
+  if (Array.isArray(value)) {
+    return [...new Set(value.map((item) => normalizeText(item)).filter(Boolean))];
+  }
+
+  return [...new Set(String(value || '').split(',').map((item) => normalizeText(item)).filter(Boolean))];
+};
 
 const parseProficiency = (value) => {
   if (value === '' || value === null || value === undefined) {
     return { value: 1 };
   }
 
-  const parsed = Number(value);
+  const normalizedValue = normalizeText(value).toLowerCase();
+  const labelMap = {
+    new: 1,
+    beginner: 1,
+    learning: 2,
+    familiar: 3,
+    intermediate: 3,
+    strong: 4,
+    advanced: 4,
+    mastered: 5,
+    expert: 5
+  };
 
-  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 5) {
-    return { error: 'Proficiency must be a whole number from 1 to 5.' };
+  if (labelMap[normalizedValue]) {
+    return { value: labelMap[normalizedValue] };
   }
 
-  return { value: parsed };
+  const directNumber = Number(normalizedValue);
+
+  if (Number.isInteger(directNumber) && directNumber >= 1 && directNumber <= 5) {
+    return { value: directNumber };
+  }
+
+  const embeddedDigitMatch = normalizedValue.match(/[1-5]/);
+
+  if (embeddedDigitMatch) {
+    return { value: Number(embeddedDigitMatch[0]) };
+  }
+
+  return { error: 'Proficiency must map to a level from 1 to 5.' };
 };
 
-const createDuplicateKey = ({ wordOrPhrase, translation, language }) =>
-  [wordOrPhrase, translation, language].map((value) => normalizeText(value).toLowerCase()).join('::');
+const isAdmin = (user) => user?.role === 'admin';
 
-const buildImportPayload = (row) => {
+const buildAccessFilter = (user) => (isAdmin(user) ? {} : { owner: user._id });
+
+const mergeFilters = (...filters) => Object.assign({}, ...filters);
+
+const getOwnerId = (record) => record.owner?._id || record.owner;
+
+const ownsRecord = (record, user) => isAdmin(user) || String(getOwnerId(record)) === String(user._id);
+
+const buildFilters = ({ language, category, proficiency, deck }) => {
+  const filters = {};
+
+  if (language) filters.language = language;
+  if (category) filters.category = category;
+  if (deck) filters.deck = deck;
+  if (proficiency) filters.proficiency = Number(proficiency);
+
+  return filters;
+};
+
+const createDuplicateKey = ({ wordOrPhrase, translation, language, deckName }) =>
+  [wordOrPhrase, translation, language, deckName || '']
+    .map((value) => normalizeText(value).toLowerCase())
+    .join('::');
+
+const getDeckByInput = async ({ deckId, deckName, user }) => {
+  if (deckId) {
+    const deck = await Deck.findById(deckId);
+
+    if (!deck) {
+      throw new Error('Selected deck was not found.');
+    }
+
+    if (!ownsRecord(deck, user)) {
+      throw new Error('You can only use decks you have access to.');
+    }
+
+    return deck;
+  }
+
+  if (!deckName) {
+    return null;
+  }
+
+  const existingDeck = await Deck.findOne({
+    name: deckName,
+    ...buildAccessFilter(user)
+  });
+
+  if (existingDeck) {
+    return existingDeck;
+  }
+
+  return Deck.create({
+    name: deckName,
+    language: '',
+    description: '',
+    owner: user._id
+  });
+};
+
+const getTagsByNames = async ({ tagNames, user }) => {
+  if (tagNames.length === 0) {
+    return [];
+  }
+
+  const existingTags = await Tag.find({
+    name: { $in: tagNames },
+    ...buildAccessFilter(user)
+  });
+
+  const tagMap = new Map(existingTags.map((tag) => [tag.name.toLowerCase(), tag]));
+  const tags = [...existingTags];
+
+  for (const tagName of tagNames) {
+    if (tagMap.has(tagName.toLowerCase())) {
+      continue;
+    }
+
+    const tag = await Tag.create({
+      name: tagName,
+      owner: user._id
+    });
+
+    tagMap.set(tag.name.toLowerCase(), tag);
+    tags.push(tag);
+  }
+
+  return tags;
+};
+
+const buildFlashcardPayload = async ({ body, user, keepOwner, currentOwner }) => {
+  const deckNameInput = typeof body.deck === 'string' ? normalizeText(body.deck) : normalizeText(body.deckName);
+  const deck = await getDeckByInput({
+    deckId: body.deckId || body.deck?._id,
+    deckName: deckNameInput,
+    user
+  });
+  const tagNames = parseTagNames(body.tagNames || body.tags?.map?.((tag) => tag.name) || body.tags);
+  const tags = await getTagsByNames({ tagNames, user });
+
+  return {
+    wordOrPhrase: normalizeText(body.wordOrPhrase),
+    translation: normalizeText(body.translation),
+    owner: keepOwner ? currentOwner : user._id,
+    deck: deck?._id || null,
+    language: normalizeText(body.language),
+    category: deck?.name || normalizeText(body.category) || 'General',
+    tags: tags.map((tag) => tag._id),
+    exampleSentence: normalizeText(body.exampleSentence),
+    proficiency: parseProficiency(body.proficiency).value ?? 1
+  };
+};
+
+const buildImportPayload = async (row, user, importOptions = {}) => {
   const wordOrPhrase = normalizeText(row.question);
   const translation = normalizeText(row.answer);
   const language = normalizeText(row.language) || 'Unspecified';
-  const category = normalizeText(row.deck) || 'General';
+  const overrideDeckName = normalizeText(importOptions.targetDeckName);
+  const deckName = overrideDeckName || normalizeText(row.deck) || 'General';
+  const tagNames = parseTagNames(row.tags);
   const proficiencyResult = parseProficiency(row.proficiency);
   const errors = [];
 
@@ -102,11 +204,29 @@ const buildImportPayload = (row) => {
   if (!translation) errors.push('Answer is required.');
   if (proficiencyResult.error) errors.push(proficiencyResult.error);
 
+  let deck = null;
+  let tags = [];
+
+  try {
+    deck = await getDeckByInput({
+      deckId: importOptions.targetDeckId,
+      deckName,
+      user
+    });
+    tags = await getTagsByNames({ tagNames, user });
+  } catch (error) {
+    errors.push(error.message);
+  }
+
   const payload = {
     wordOrPhrase,
     translation,
+    owner: user._id,
+    deck: deck?._id || null,
     language,
-    category,
+    category: deck?.name || deckName,
+    tags: tags.map((tag) => tag._id),
+    exampleSentence: '',
     proficiency: proficiencyResult.value ?? 1
   };
 
@@ -118,14 +238,15 @@ const buildImportPayload = (row) => {
 
   return {
     payload,
+    deckName: payload.category,
     errors: [...new Set(errors)]
   };
 };
 
 exports.getFlashcards = async (req, res) => {
   try {
-    const filters = buildFilters(req.query);
-    const flashcards = await Flashcard.find(filters).sort({ createdAt: -1 });
+    const filters = mergeFilters(buildAccessFilter(req.user), buildFilters(req.query));
+    const flashcards = await Flashcard.find(filters).populate(FLASHCARD_POPULATION).sort({ createdAt: -1 });
     res.status(200).json(flashcards);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch flashcards.', error: error.message });
@@ -134,10 +255,14 @@ exports.getFlashcards = async (req, res) => {
 
 exports.getFlashcardById = async (req, res) => {
   try {
-    const flashcard = await Flashcard.findById(req.params.id);
+    const flashcard = await Flashcard.findById(req.params.id).populate(FLASHCARD_POPULATION);
 
     if (!flashcard) {
       return res.status(404).json({ message: 'Flashcard not found.' });
+    }
+
+    if (!ownsRecord(flashcard, req.user)) {
+      return res.status(403).json({ message: 'You do not have access to this flashcard.' });
     }
 
     res.status(200).json(flashcard);
@@ -148,7 +273,10 @@ exports.getFlashcardById = async (req, res) => {
 
 exports.createFlashcard = async (req, res) => {
   try {
-    const flashcard = await Flashcard.create(req.body);
+    const payload = await buildFlashcardPayload({ body: req.body, user: req.user });
+    const flashcard = await Flashcard.create(payload);
+
+    await flashcard.populate(FLASHCARD_POPULATION);
     res.status(201).json(flashcard);
   } catch (error) {
     res.status(400).json({ message: 'Failed to create flashcard.', error: error.message });
@@ -157,14 +285,29 @@ exports.createFlashcard = async (req, res) => {
 
 exports.updateFlashcard = async (req, res) => {
   try {
-    const flashcard = await Flashcard.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
-    });
+    const flashcard = await Flashcard.findById(req.params.id);
 
     if (!flashcard) {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
+
+    if (!ownsRecord(flashcard, req.user)) {
+      return res.status(403).json({ message: 'You can only update your own flashcards.' });
+    }
+
+    const payload = await buildFlashcardPayload({
+      body: {
+        ...flashcard.toObject(),
+        ...req.body
+      },
+      user: req.user,
+      keepOwner: true,
+      currentOwner: flashcard.owner
+    });
+
+    Object.assign(flashcard, payload);
+    await flashcard.save();
+    await flashcard.populate(FLASHCARD_POPULATION);
 
     res.status(200).json(flashcard);
   } catch (error) {
@@ -174,11 +317,17 @@ exports.updateFlashcard = async (req, res) => {
 
 exports.deleteFlashcard = async (req, res) => {
   try {
-    const flashcard = await Flashcard.findByIdAndDelete(req.params.id);
+    const flashcard = await Flashcard.findById(req.params.id);
 
     if (!flashcard) {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
+
+    if (!ownsRecord(flashcard, req.user)) {
+      return res.status(403).json({ message: 'You can only delete your own flashcards.' });
+    }
+
+    await flashcard.deleteOne();
 
     res.status(200).json({ message: 'Flashcard deleted successfully.' });
   } catch (error) {
@@ -195,8 +344,10 @@ exports.updateProficiency = async (req, res) => {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
 
-    // Simple beginner-friendly proficiency update formula:
-    // New value = rounded average of current proficiency and user rating.
+    if (!ownsRecord(flashcard, req.user)) {
+      return res.status(403).json({ message: 'You can only update your own flashcards.' });
+    }
+
     const safeRating = Math.min(5, Math.max(1, Number(rating)));
     flashcard.proficiency = Math.min(5, Math.max(1, Math.round((flashcard.proficiency + safeRating) / 2)));
 
@@ -204,6 +355,30 @@ exports.updateProficiency = async (req, res) => {
     res.status(200).json(flashcard);
   } catch (error) {
     res.status(400).json({ message: 'Failed to update proficiency.', error: error.message });
+  }
+};
+
+exports.resetFlashcardProficiency = async (req, res) => {
+  try {
+    const flashcard = await Flashcard.findById(req.params.id);
+
+    if (!flashcard) {
+      return res.status(404).json({ message: 'Flashcard not found.' });
+    }
+
+    if (!ownsRecord(flashcard, req.user)) {
+      return res.status(403).json({ message: 'You can only reset proficiency for your own flashcards.' });
+    }
+
+    flashcard.proficiency = 1;
+    await flashcard.save();
+
+    res.status(200).json({
+      message: 'Flashcard proficiency reset successfully.',
+      flashcard
+    });
+  } catch (error) {
+    res.status(400).json({ message: 'Failed to reset flashcard proficiency.', error: error.message });
   }
 };
 
@@ -221,6 +396,10 @@ exports.reviewFlashcard = async (req, res) => {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
 
+    if (!ownsRecord(flashcard, req.user)) {
+      return res.status(403).json({ message: 'You can only review your own flashcards.' });
+    }
+
     applyReviewRating(flashcard, rating);
 
     await flashcard.save();
@@ -232,18 +411,17 @@ exports.reviewFlashcard = async (req, res) => {
 
 exports.getDashboardStats = async (req, res) => {
   try {
-    const [total, mastered, newCards, dueToday] = await Promise.all([
-      Flashcard.countDocuments(),
-      Flashcard.countDocuments({ proficiency: 5 }),
-      Flashcard.countDocuments({ proficiency: 1 }),
-      Flashcard.countDocuments(getDueFilter(getStartOfTomorrow()))
+    const accessFilter = buildAccessFilter(req.user);
+    const [total, mastered, newCards] = await Promise.all([
+      Flashcard.countDocuments(accessFilter),
+      Flashcard.countDocuments(mergeFilters(accessFilter, { proficiency: 5 })),
+      Flashcard.countDocuments(mergeFilters(accessFilter, { proficiency: 1 }))
     ]);
 
     res.status(200).json({
       total,
       mastered,
-      newCards,
-      dueToday
+      newCards
     });
   } catch (error) {
     res.status(500).json({ message: 'Failed to load dashboard stats.', error: error.message });
@@ -254,6 +432,8 @@ exports.bulkImportFlashcards = async (req, res) => {
   try {
     const rows = Array.isArray(req.body.rows) ? req.body.rows : [];
     const duplicateHandling = String(req.body.duplicateHandling || 'skip').toLowerCase();
+    const targetDeckId = normalizeText(req.body.targetDeckId);
+    const targetDeckName = normalizeText(req.body.targetDeckName);
 
     if (!DUPLICATE_OPTIONS.has(duplicateHandling)) {
       return res.status(400).json({
@@ -261,8 +441,24 @@ exports.bulkImportFlashcards = async (req, res) => {
       });
     }
 
-    const existingCards = await Flashcard.find({}, 'wordOrPhrase translation language category proficiency');
-    const existingMap = new Map(existingCards.map((card) => [createDuplicateKey(card), card]));
+    if (targetDeckId && targetDeckName) {
+      return res.status(400).json({
+        message: 'Choose either an existing deck or a new deck name for this import, not both.'
+      });
+    }
+
+    const existingCards = await Flashcard.find(buildAccessFilter(req.user)).populate({ path: 'deck', select: 'name' });
+    const existingMap = new Map(
+      existingCards.map((card) => [
+        createDuplicateKey({
+          wordOrPhrase: card.wordOrPhrase,
+          translation: card.translation,
+          language: card.language,
+          deckName: card.deck?.name || card.category
+        }),
+        card
+      ])
+    );
 
     const summary = {
       totalRows: rows.length,
@@ -275,7 +471,10 @@ exports.bulkImportFlashcards = async (req, res) => {
 
     for (const [index, row] of rows.entries()) {
       const rowNumber = Number(row.rowNumber) || index + 1;
-      const { payload, errors } = buildImportPayload(row);
+      const { payload, deckName, errors } = await buildImportPayload(row, req.user, {
+        targetDeckId,
+        targetDeckName
+      });
 
       if (errors.length > 0) {
         summary.invalidRows += 1;
@@ -287,7 +486,12 @@ exports.bulkImportFlashcards = async (req, res) => {
         continue;
       }
 
-      const duplicateKey = createDuplicateKey(payload);
+      const duplicateKey = createDuplicateKey({
+        wordOrPhrase: payload.wordOrPhrase,
+        translation: payload.translation,
+        language: payload.language,
+        deckName
+      });
       const existingCard = existingMap.get(duplicateKey);
 
       if (existingCard) {
@@ -305,8 +509,10 @@ exports.bulkImportFlashcards = async (req, res) => {
         if (duplicateHandling === 'update_existing') {
           existingCard.wordOrPhrase = payload.wordOrPhrase;
           existingCard.translation = payload.translation;
+          existingCard.deck = payload.deck;
           existingCard.language = payload.language;
           existingCard.category = payload.category;
+          existingCard.tags = payload.tags;
           existingCard.proficiency = payload.proficiency;
 
           await existingCard.save();
@@ -322,10 +528,7 @@ exports.bulkImportFlashcards = async (req, res) => {
       }
 
       const flashcard = await Flashcard.create(payload);
-
-      if (!existingMap.has(duplicateKey)) {
-        existingMap.set(duplicateKey, flashcard);
-      }
+      existingMap.set(duplicateKey, flashcard);
 
       summary.insertedRows += 1;
       summary.results.push({
@@ -338,5 +541,43 @@ exports.bulkImportFlashcards = async (req, res) => {
     res.status(200).json(summary);
   } catch (error) {
     res.status(500).json({ message: 'Failed to import flashcards.', error: error.message });
+  }
+};
+
+exports.removeDuplicateWords = async (req, res) => {
+  try {
+    const flashcards = await Flashcard.find(buildAccessFilter(req.user)).sort({ createdAt: 1, _id: 1 });
+    const seenWords = new Set();
+    const duplicateIds = [];
+
+    flashcards.forEach((flashcard) => {
+      const normalizedWord = normalizeText(flashcard.wordOrPhrase).toLowerCase();
+
+      if (!normalizedWord) {
+        return;
+      }
+
+      if (seenWords.has(normalizedWord)) {
+        duplicateIds.push(flashcard._id);
+      } else {
+        seenWords.add(normalizedWord);
+      }
+    });
+
+    if (duplicateIds.length === 0) {
+      return res.status(200).json({
+        message: 'No duplicate words were found.',
+        removedCount: 0
+      });
+    }
+
+    await Flashcard.deleteMany({ _id: { $in: duplicateIds } });
+
+    res.status(200).json({
+      message: 'Duplicate words removed successfully.',
+      removedCount: duplicateIds.length
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to remove duplicate words.', error: error.message });
   }
 };

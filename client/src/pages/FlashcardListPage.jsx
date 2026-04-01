@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import FilterBar from '../components/FilterBar';
-import { deleteFlashcard, getFlashcards } from '../services/flashcardService';
+import { deleteFlashcard, getFlashcards, removeDuplicateWords, resetFlashcardProficiency } from '../services/flashcardService';
 import { useAuth } from '../context/AuthContext';
 
 const initialFilters = {
@@ -14,11 +14,6 @@ function FlashcardListPage() {
   const { isAdmin } = useAuth();
   const [flashcards, setFlashcards] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
-
-  const formatReviewDate = (value) => {
-    if (!value) return 'Due now';
-    return new Date(value).toLocaleDateString();
-  };
 
   const loadFlashcards = async (activeFilters = filters) => {
     try {
@@ -57,47 +52,90 @@ function FlashcardListPage() {
     }
   };
 
+  const handleResetProficiency = async (id) => {
+    try {
+      await resetFlashcardProficiency(id);
+      loadFlashcards();
+    } catch (error) {
+      console.error('Failed to reset flashcard proficiency:', error);
+      alert(error.response?.data?.message || 'Could not reset flashcard proficiency.');
+    }
+  };
+
+  const handleRemoveDuplicates = async () => {
+    const confirmed = window.confirm('Remove all duplicate words? The oldest copy of each word will be kept.');
+    if (!confirmed) return;
+
+    try {
+      const { data } = await removeDuplicateWords();
+      alert(`${data.message} Removed: ${data.removedCount}`);
+      loadFlashcards();
+    } catch (error) {
+      console.error('Failed to remove duplicate words:', error);
+      alert(error.response?.data?.message || 'Could not remove duplicate words.');
+    }
+  };
+
   return (
-    <section>
-      <h2>Flashcard List</h2>
+    <section className="page-section">
+      <div className="card hero-card">
+        <h2>{isAdmin ? 'All Flashcards' : 'My Flashcards'}</h2>
+        <p>Browse, filter, and manage the flashcards available in your current view.</p>
+      </div>
+
       <FilterBar filters={filters} onChange={handleFilterChange} onReset={handleReset} />
+      <div className="action-row page-actions">
+        <button type="button" onClick={handleRemoveDuplicates} className="secondary-button">
+          Remove All Duplicate Words
+        </button>
+      </div>
 
       <div className="list-grid">
         {flashcards.map((card) => (
-          <article key={card._id} className="card">
-            <h3>{card.wordOrPhrase}</h3>
+          <article key={card._id} className="card flashcard-card">
+            <div className="flashcard-card-header">
+              <div>
+                <h3>{card.wordOrPhrase}</h3>
+                <p className="flashcard-translation">{card.translation}</p>
+              </div>
+              <span className="mapped-column-tag">Level {card.proficiency}</span>
+            </div>
+
+            <div className="flashcard-meta">
+              <p>
+                <strong>Language:</strong> {card.language}
+              </p>
+              <p>
+                <strong>Deck:</strong> {card.deck?.name || card.category || 'General'}
+              </p>
+              <p>
+                <strong>Review Count:</strong> {card.reviewCount ?? 0}
+              </p>
+            </div>
+
             <p>
-              <strong>Translation:</strong> {card.translation}
+              <strong>Tags:</strong> {card.tags?.length ? card.tags.map((tag) => tag.name).join(', ') : 'No tags'}
             </p>
-            <p>
-              <strong>Language:</strong> {card.language}
-            </p>
-            <p>
-              <strong>Category:</strong> {card.category || 'General'}
-            </p>
-            <p>
+            <p className="muted-text">
               <strong>Example:</strong> {card.exampleSentence || 'No example yet'}
             </p>
-            <p>
-              <strong>Proficiency:</strong> {card.proficiency}
-            </p>
-            <p>
-              <strong>Next Review:</strong> {(card.reviewCount ?? 0) === 0 ? 'Due now' : formatReviewDate(card.nextReviewDate)}
-            </p>
-            <p>
-              <strong>Review Count:</strong> {card.reviewCount ?? 0}
-            </p>
-
-            {isAdmin && (
-              <div className="action-row">
-                <Link className="button-link" to={`/edit/${card._id}`}>
-                  Edit
-                </Link>
-                <button type="button" onClick={() => handleDelete(card._id)} className="danger-button">
-                  Delete
-                </button>
-              </div>
+            {isAdmin && card.owner && (
+              <p className="muted-text">
+                <strong>Owner:</strong> {card.owner.username}
+              </p>
             )}
+
+            <div className="action-row">
+              <Link className="button-link" to={`/edit/${card._id}`}>
+                Edit
+              </Link>
+              <button type="button" onClick={() => handleResetProficiency(card._id)} className="secondary-button">
+                Reset Proficiency
+              </button>
+              <button type="button" onClick={() => handleDelete(card._id)} className="danger-button">
+                Delete
+              </button>
+            </div>
           </article>
         ))}
       </div>

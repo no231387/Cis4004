@@ -19,8 +19,8 @@ function LoginPage() {
 
     try {
       setError('');
-      await login(formData);
-      const redirectTo = location.state?.from?.pathname || '/';
+      const user = await login(formData);
+      const redirectTo = location.state?.from?.pathname || (user.role === 'admin' ? '/official-beginner-decks' : '/');
       navigate(redirectTo, { replace: true });
     } catch (requestError) {
       setError(requestError.response?.data?.message || 'Login failed.');
@@ -32,6 +32,7 @@ function LoginPage() {
       <div className="card auth-card">
         <h2>Login</h2>
         <p>Sign in to access your flashcards.</p>
+        <p className="muted-text">After login, the app will clearly label whether you are signed in as an admin or a standard user.</p>
 
         <form className="form-card" onSubmit={handleSubmit}>
           <label>

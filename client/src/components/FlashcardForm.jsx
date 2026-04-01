@@ -4,19 +4,49 @@ const defaultState = {
   wordOrPhrase: '',
   translation: '',
   language: '',
+  deckId: '',
   category: '',
+  tagNames: '',
   exampleSentence: '',
   proficiency: 1
 };
 
-function FlashcardForm({ initialData, onSubmit, submitLabel = 'Save Flashcard' }) {
-  const [formData, setFormData] = useState(initialData || defaultState);
+const getInitialState = (initialData) => {
+  if (!initialData) {
+    return defaultState;
+  }
+
+  return {
+    wordOrPhrase: initialData.wordOrPhrase || '',
+    translation: initialData.translation || '',
+    language: initialData.language || '',
+    deckId: initialData.deck?._id || initialData.deckId || '',
+    category: initialData.category || '',
+    tagNames: Array.isArray(initialData.tags) ? initialData.tags.map((tag) => tag.name).join(', ') : initialData.tagNames || '',
+    exampleSentence: initialData.exampleSentence || '',
+    proficiency: initialData.proficiency || 1
+  };
+};
+
+function FlashcardForm({ initialData, decks = [], onSubmit, submitLabel = 'Save Flashcard' }) {
+  const [formData, setFormData] = useState(getInitialState(initialData));
 
   const handleChange = (event) => {
     const { name, value } = event.target;
     setFormData((previous) => ({
       ...previous,
       [name]: name === 'proficiency' ? Number(value) : value
+    }));
+  };
+
+  const handleDeckChange = (event) => {
+    const selectedDeckId = event.target.value;
+    const selectedDeck = decks.find((deck) => deck._id === selectedDeckId);
+
+    setFormData((previous) => ({
+      ...previous,
+      deckId: selectedDeckId,
+      category: selectedDeck?.name || previous.category
     }));
   };
 
@@ -43,8 +73,30 @@ function FlashcardForm({ initialData, onSubmit, submitLabel = 'Save Flashcard' }
       </label>
 
       <label>
+        Deck
+        <select name="deckId" value={formData.deckId} onChange={handleDeckChange}>
+          <option value="">No deck selected</option>
+          {decks.map((deck) => (
+            <option key={deck._id} value={deck._id}>
+              {deck.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label>
         Category / Topic
-        <input name="category" value={formData.category} onChange={handleChange} />
+        <input
+          name="category"
+          value={formData.category}
+          onChange={handleChange}
+          placeholder="Used when no deck is selected or during import fallback"
+        />
+      </label>
+
+      <label>
+        Tags
+        <input name="tagNames" value={formData.tagNames} onChange={handleChange} placeholder="e.g., verbs, travel, beginner" />
       </label>
 
       <label>

@@ -1,6 +1,82 @@
-const SUPPORTED_FIELDS = ['question', 'answer', 'proficiency', 'deck', 'language'];
+export const IMPORT_FIELD_CONFIG = [
+  {
+    key: 'question',
+    label: 'Word / Phrase',
+    required: true,
+    aliases: ['question', 'word', 'wordphrase', 'wordorphrase', 'phrase', 'front', 'term']
+  },
+  {
+    key: 'answer',
+    label: 'Translation',
+    required: true,
+    aliases: ['answer', 'translation', 'back', 'meaning']
+  },
+  {
+    key: 'proficiency',
+    label: 'Learning Level',
+    required: false,
+    aliases: ['proficiency', 'level', 'learninglevel', 'proficiencylevel', 'proficiencylevel15']
+  },
+  {
+    key: 'deck',
+    label: 'Deck (Optional)',
+    required: false,
+    aliases: ['deck', 'category', 'topic']
+  },
+  {
+    key: 'language',
+    label: 'Language',
+    required: false,
+    aliases: ['language', 'lang']
+  }
+];
 
 const normalizeCell = (value) => String(value ?? '').trim();
+const normalizeHeader = (value) => normalizeCell(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+
+export const createEmptyMapping = () =>
+  IMPORT_FIELD_CONFIG.reduce((mapping, field) => {
+    mapping[field.key] = '';
+    return mapping;
+  }, {});
+
+const parsePreviewProficiency = (value) => {
+  const normalizedValue = normalizeCell(value).toLowerCase();
+
+  if (!normalizedValue) {
+    return { value: '' };
+  }
+
+  const labelMap = {
+    new: 1,
+    beginner: 1,
+    learning: 2,
+    familiar: 3,
+    intermediate: 3,
+    strong: 4,
+    advanced: 4,
+    mastered: 5,
+    expert: 5
+  };
+
+  if (labelMap[normalizedValue]) {
+    return { value: String(labelMap[normalizedValue]) };
+  }
+
+  const directNumber = Number(normalizedValue);
+
+  if (Number.isInteger(directNumber) && directNumber >= 1 && directNumber <= 5) {
+    return { value: String(directNumber) };
+  }
+
+  const embeddedDigitMatch = normalizedValue.match(/[1-5]/);
+
+  if (embeddedDigitMatch) {
+    return { value: embeddedDigitMatch[0] };
+  }
+
+  return { error: 'Learning Level must map to a level from 1 to 5.' };
+};
 
 const splitDelimitedLine = (line, delimiter) => {
   const values = [];
@@ -80,43 +156,31 @@ export const parseImportText = (text, options = {}) => {
     delimiter,
     headers,
     rows: dataRows.map((cells, index) => ({
-      rowNumber: hasHeaders ? index + 2 : index + 1,
+      rowNumber: index + 1,
       cells
     }))
   };
 };
 
-const HEADER_ALIASES = {
-  question: ['question', 'word', 'wordorphrase', 'phrase', 'front'],
-  answer: ['answer', 'translation', 'back'],
-  proficiency: ['proficiency', 'level'],
-  deck: ['deck', 'category', 'topic'],
-  language: ['language', 'lang']
-};
-
-export const getDefaultMapping = (headers) => {
-  const mapping = {
-    question: '',
-    answer: '',
-    proficiency: '',
-    deck: '',
-    language: ''
-  };
+export const getAutoMapping = (headers) => {
+  const mapping = createEmptyMapping();
+  const autoMappedFields = [];
 
   headers.forEach((header, index) => {
-    const normalizedHeader = normalizeCell(header).toLowerCase().replace(/\s+/g, '');
+    const normalizedHeader = normalizeHeader(header);
+    const matchingField = IMPORT_FIELD_CONFIG.find((field) => field.aliases.includes(normalizedHeader));
 
-    SUPPORTED_FIELDS.forEach((field) => {
-      if (!mapping[field] && HEADER_ALIASES[field].includes(normalizedHeader)) {
-        mapping[field] = String(index);
-      }
-    });
+    if (matchingField && !mapping[matchingField.key]) {
+      mapping[matchingField.key] = String(index);
+      autoMappedFields.push(matchingField.key);
+    }
   });
 
-  if (!mapping.question && headers[0]) mapping.question = '0';
-  if (!mapping.answer && headers[1]) mapping.answer = '1';
-
-  return mapping;
+  return {
+    mapping,
+    autoMappedFields,
+    missingRequiredFields: IMPORT_FIELD_CONFIG.filter((field) => field.required && mapping[field.key] === '').map((field) => field.key)
+  };
 };
 
 export const validatePreviewRows = (rows, mapping) =>
@@ -131,23 +195,23 @@ export const validatePreviewRows = (rows, mapping) =>
       rowNumber: row.rowNumber,
       question: getValue('question'),
       answer: getValue('answer'),
-      proficiency: getValue('proficiency'),
+      proficiency: '',
       deck: getValue('deck'),
       language: getValue('language')
     };
 
     const errors = [];
 
-    if (!cleanedRow.question) errors.push('Question is required.');
-    if (!cleanedRow.answer) errors.push('Answer is required.');
+    if (!cleanedRow.question) errors.push('Word / Phrase is required.');
+    if (!cleanedRow.answer) errors.push('Translation is required.');
 
-    if (cleanedRow.proficiency) {
-      const proficiencyValue = Number(cleanedRow.proficiency);
+    const proficiencyResult = parsePreviewProficiency(getValue('proficiency'));
 
-      if (!Number.isInteger(proficiencyValue) || proficiencyValue < 1 || proficiencyValue > 5) {
-        errors.push('Proficiency must be a whole number from 1 to 5.');
-      }
+    if (proficiencyResult.error) {
+      errors.push(proficiencyResult.error);
     }
+
+    cleanedRow.proficiency = proficiencyResult.value || '';
 
     return {
       ...row,
@@ -157,7 +221,7 @@ export const validatePreviewRows = (rows, mapping) =>
     };
   });
 
-export const buildSampleCsv = () => `question,answer,proficiency,deck,language
+export const buildSampleCsv = () => `Word or Phrase,Translation,Proficiency Level (1-5),Deck,Language
 Hola,Hello,1,Greetings,Spanish
 Gracias,Thank you,2,Essentials,Spanish
 `;
