@@ -1,10 +1,20 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import FlashcardForm from '../components/FlashcardForm';
 import FilterBar from '../components/FilterBar';
-import { deleteFlashcard, getFlashcards, removeDuplicateWords, resetFlashcardProficiency } from '../services/flashcardService';
+import {
+  createFlashcard,
+  deleteFlashcard,
+  getDecks,
+  getFlashcards,
+  getOfficialBeginnerDecks,
+  removeDuplicateWords,
+  resetFlashcardProficiency
+} from '../services/flashcardService';
 import { useAuth } from '../context/AuthContext';
 
 const initialFilters = {
+  search: '',
   language: '',
   category: '',
   proficiency: ''
@@ -14,6 +24,10 @@ function FlashcardListPage() {
   const { isAdmin } = useAuth();
   const [flashcards, setFlashcards] = useState([]);
   const [filters, setFilters] = useState(initialFilters);
+  const [decks, setDecks] = useState([]);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [showFlashcards, setShowFlashcards] = useState(true);
+  const [formKey, setFormKey] = useState(0);
 
   const loadFlashcards = async (activeFilters = filters) => {
     try {
@@ -26,18 +40,38 @@ function FlashcardListPage() {
   };
 
   useEffect(() => {
-    loadFlashcards();
-  }, []);
+    const loadDeckOptions = async () => {
+      try {
+        const [{ data: standardDecks }, { data: officialDecks }] = await Promise.all([
+          getDecks(),
+          isAdmin ? getOfficialBeginnerDecks() : Promise.resolve({ data: [] })
+        ]);
+        setDecks([...standardDecks, ...officialDecks]);
+      } catch (error) {
+        console.error('Failed to load decks:', error);
+      }
+    };
+
+    loadDeckOptions();
+  }, [isAdmin]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      loadFlashcards(filters);
+    }, filters.search ? 200 : 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [filters]);
 
   const handleFilterChange = (event) => {
-    const updated = { ...filters, [event.target.name]: event.target.value };
-    setFilters(updated);
-    loadFlashcards(updated);
+    setFilters((currentFilters) => ({
+      ...currentFilters,
+      [event.target.name]: event.target.value
+    }));
   };
 
   const handleReset = () => {
     setFilters(initialFilters);
-    loadFlashcards(initialFilters);
   };
 
   const handleDelete = async (id) => {
@@ -76,69 +110,129 @@ function FlashcardListPage() {
     }
   };
 
-  return (
-    <section className="page-section">
-      <div className="card hero-card">
-        <h2>{isAdmin ? 'All Flashcards' : 'My Flashcards'}</h2>
-        <p>Browse, filter, and manage the flashcards available in your current view.</p>
+  const handleCreate = async (formData) => {
+    try {
+      await createFlashcard(formData);
+      setFormKey((current) => current + 1);
+      setShowAddForm(false);
+      loadFlashcards();
+    } catch (error) {
+      console.error('Failed to create flashcard:', error);
+      alert('Could not create flashcard. Please check your input.');
+    }
+  };
+
+  const renderFlashcard = (card) => (
+    <article key={card._id} className="card flashcard-card">
+      <div className="flashcard-card-header">
+        <div>
+          <h3>{card.wordOrPhrase}</h3>
+          <p className="flashcard-translation">{card.translation}</p>
+        </div>
+        <span className="mapped-column-tag">Level {card.proficiency}</span>
       </div>
 
-      <FilterBar filters={filters} onChange={handleFilterChange} onReset={handleReset} />
-      <div className="action-row page-actions">
-        <button type="button" onClick={handleRemoveDuplicates} className="secondary-button">
-          Remove All Duplicate Words
+      <div className="flashcard-meta">
+        <p>
+          <strong>Language:</strong> {card.language}
+        </p>
+        <p>
+          <strong>Deck:</strong> {card.deck?.name || card.category || 'General'}
+        </p>
+        <p>
+          <strong>Review Count:</strong> {card.reviewCount ?? 0}
+        </p>
+      </div>
+
+      <p>
+        <strong>Tags:</strong> {card.tags?.length ? card.tags.map((tag) => tag.name).join(', ') : 'No tags'}
+      </p>
+      <p className="muted-text">
+        <strong>Example:</strong> {card.exampleSentence || 'No example yet'}
+      </p>
+      {isAdmin && card.owner && (
+        <p className="muted-text">
+          <strong>Owner:</strong> {card.owner.username}
+        </p>
+      )}
+
+      <div className="action-row">
+        <Link className="button-link" to={`/edit/${card._id}`}>
+          Edit
+        </Link>
+        <button type="button" onClick={() => handleResetProficiency(card._id)} className="secondary-button">
+          Reset Proficiency
+        </button>
+        <button type="button" onClick={() => handleDelete(card._id)} className="danger-button">
+          Delete
+        </button>
+      </div>
+    </article>
+  );
+
+  return (
+    <section className="page-section">
+      <div className="card hero-card flashcards-hero">
+        <div className="flashcards-hero-copy">
+          <h2>{isAdmin ? 'All Flashcards' : 'My Flashcards'}</h2>
+          <p>Search, add, and manage flashcards from one place without leaving the page.</p>
+        </div>
+        <div className="flashcards-toolbar">
+          <button type="button" onClick={() => setShowAddForm((current) => !current)}>
+            {showAddForm ? 'Hide Add Form' : 'Add Flashcard'}
+          </button>
+          <button type="button" onClick={handleRemoveDuplicates} className="secondary-button">
+            Remove All Duplicate Words
+          </button>
+        </div>
+      </div>
+
+      <div className="flashcards-workspace">
+        <FilterBar filters={filters} onChange={handleFilterChange} onReset={handleReset} />
+        <div className="card flashcards-add-panel">
+          <div className="section-header">
+            <div>
+              <h3>Quick Add</h3>
+              <p className="muted-text">
+                {isAdmin
+                  ? 'Create a new flashcard here and it will appear in the list immediately.'
+                  : 'Add a new card to your collection without leaving the flashcards tab.'}
+              </p>
+            </div>
+            <button type="button" onClick={() => setShowAddForm((current) => !current)} className="secondary-button">
+              {showAddForm ? 'Collapse' : 'Open Form'}
+            </button>
+          </div>
+
+          {showAddForm ? (
+            <FlashcardForm
+              key={formKey}
+              decks={decks}
+              onSubmit={handleCreate}
+              submitLabel="Create Flashcard"
+              submitClassName="easy-button"
+              className="flashcards-inline-form"
+              layout="compact"
+            />
+          ) : (
+            <p className="muted-text">Open the form when you want to add a card. Your filters and results stay right where they are.</p>
+          )}
+        </div>
+      </div>
+
+      <div className="card flashcards-results-header">
+        <div className="flashcards-results-copy">
+          <h3>All Flashcards</h3>
+          <p className="muted-text">
+            {flashcards.length} {flashcards.length === 1 ? 'flashcard' : 'flashcards'} found
+          </p>
+        </div>
+        <button type="button" onClick={() => setShowFlashcards((current) => !current)} className="secondary-button">
+          {showFlashcards ? 'Collapse' : 'Show Flashcards'}
         </button>
       </div>
 
-      <div className="list-grid">
-        {flashcards.map((card) => (
-          <article key={card._id} className="card flashcard-card">
-            <div className="flashcard-card-header">
-              <div>
-                <h3>{card.wordOrPhrase}</h3>
-                <p className="flashcard-translation">{card.translation}</p>
-              </div>
-              <span className="mapped-column-tag">Level {card.proficiency}</span>
-            </div>
-
-            <div className="flashcard-meta">
-              <p>
-                <strong>Language:</strong> {card.language}
-              </p>
-              <p>
-                <strong>Deck:</strong> {card.deck?.name || card.category || 'General'}
-              </p>
-              <p>
-                <strong>Review Count:</strong> {card.reviewCount ?? 0}
-              </p>
-            </div>
-
-            <p>
-              <strong>Tags:</strong> {card.tags?.length ? card.tags.map((tag) => tag.name).join(', ') : 'No tags'}
-            </p>
-            <p className="muted-text">
-              <strong>Example:</strong> {card.exampleSentence || 'No example yet'}
-            </p>
-            {isAdmin && card.owner && (
-              <p className="muted-text">
-                <strong>Owner:</strong> {card.owner.username}
-              </p>
-            )}
-
-            <div className="action-row">
-              <Link className="button-link" to={`/edit/${card._id}`}>
-                Edit
-              </Link>
-              <button type="button" onClick={() => handleResetProficiency(card._id)} className="secondary-button">
-                Reset Proficiency
-              </button>
-              <button type="button" onClick={() => handleDelete(card._id)} className="danger-button">
-                Delete
-              </button>
-            </div>
-          </article>
-        ))}
-      </div>
+      {showFlashcards && <div className="list-grid">{flashcards.map((card) => renderFlashcard(card))}</div>}
 
       {flashcards.length === 0 && <p>No flashcards found. Try adding a new one.</p>}
     </section>

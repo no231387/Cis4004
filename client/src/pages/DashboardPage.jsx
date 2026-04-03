@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { getDashboardStats, getDecks, getStudySessions } from '../services/flashcardService';
 import { useAuth } from '../context/AuthContext';
 
@@ -29,59 +30,74 @@ function DashboardPage() {
 
   return (
     <section className="page-section">
-      <div className="card hero-card">
-        <h2>Welcome to LinguaCards</h2>
-        <p>Use this app to create language flashcards, track proficiency, and keep up with your daily reviews.</p>
-        <p>
-          Current access:
-          {' '}
-          <strong>{isAdmin ? 'Admin' : 'Standard User'}</strong>
-          {isAdmin
-            ? ' Admin access: you can manage official decks and all system flashcards.'
-            : ' Standard access: you can manage only your own content and view official beginner decks.'}
-        </p>
+      <div className="card hero-card dashboard-hero">
+        <div className="dashboard-hero-copy">
+          <p className="dashboard-eyebrow">Welcome back{user?.username ? `, ${user.username}` : ''}</p>
+          <h2>Keep your practice simple.</h2>
+          <p>Study now!</p>
+        </div>
+        <div className="dashboard-hero-side">
+          <div className="dashboard-access-pill">
+            <span className={`role-badge ${isAdmin ? 'role-admin' : 'role-standard'}`}>{isAdmin ? 'Admin' : 'Standard User'}</span>
+            <span className="muted-text">
+              {isAdmin ? 'You can manage official decks and all flashcards.' : 'You can manage your own content and study decks.'}
+            </span>
+          </div>
+          <div className="quick-links dashboard-quick-links">
+            <Link to="/flashcards">Open Flashcards</Link>
+            <Link to="/study" className="secondary-button">
+              Start Study
+            </Link>
+          </div>
+        </div>
       </div>
 
       <div className="stats-grid">
         <article className="card stat-card">
-          <h3>Total Flashcards</h3>
+          <h3>Flashcards</h3>
           <p className="stat-number">{stats.total}</p>
+          <p className="muted-text">Cards ready to review</p>
         </article>
         <article className="card stat-card">
-          <h3>Mastered Cards</h3>
+          <h3>Mastered</h3>
           <p className="stat-number">{stats.mastered}</p>
+          <p className="muted-text">Cards at your strongest level</p>
         </article>
         <article className="card stat-card">
-          <h3>New Cards</h3>
+          <h3>New</h3>
           <p className="stat-number">{stats.newCards}</p>
+          <p className="muted-text">Fresh cards still to learn</p>
         </article>
         <article className="card stat-card">
-          <h3>Total Decks</h3>
+          <h3>Decks</h3>
           <p className="stat-number">{deckCount}</p>
+          <p className="muted-text">Collections you can jump into</p>
         </article>
       </div>
 
-      <div className="card">
+      <div className="card dashboard-sessions-card">
         <div className="section-header">
           <div>
             <h3>Recent Study Sessions</h3>
-            <p className="muted-text">Your latest study activity appears here.</p>
+            <p className="muted-text">A quick glance at your latest review activity.</p>
           </div>
         </div>
         {sessions.length === 0 ? (
-          <p>No study sessions recorded yet.</p>
+          <p className="muted-text">No study sessions recorded yet. Start a study round and it will show up here.</p>
         ) : (
           sessions.map((session) => (
-            <div key={session._id} className="sub-card">
-              <p>
-                <strong>{new Date(session.completedAt).toLocaleString()}</strong>
-              </p>
-              <p className="muted-text">
+            <div key={session._id} className="dashboard-session-row">
+              <div>
+                <p>
+                  <strong>{new Date(session.completedAt).toLocaleString()}</strong>
+                </p>
+                <p className="muted-text">{session.deck ? session.deck.name : 'Mixed practice session'}</p>
+              </div>
+              <span className="mapped-column-tag">
                 {session.reviewedCount}
                 {' '}
-                card(s)
-                {session.deck ? ` in ${session.deck.name}` : ''}
-              </p>
+                cards
+              </span>
             </div>
           ))
         )}

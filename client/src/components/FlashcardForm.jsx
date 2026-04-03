@@ -28,7 +28,15 @@ const getInitialState = (initialData) => {
   };
 };
 
-function FlashcardForm({ initialData, decks = [], onSubmit, submitLabel = 'Save Flashcard' }) {
+function FlashcardForm({
+  initialData,
+  decks = [],
+  onSubmit,
+  submitLabel = 'Save Flashcard',
+  className = '',
+  submitClassName = '',
+  layout = 'stacked'
+}) {
   const [formData, setFormData] = useState(getInitialState(initialData));
 
   const handleChange = (event) => {
@@ -56,7 +64,7 @@ function FlashcardForm({ initialData, decks = [], onSubmit, submitLabel = 'Save 
   };
 
   return (
-    <form className="card form-card" onSubmit={handleSubmit}>
+    <form className={`card form-card ${layout === 'compact' ? 'compact-form-card' : ''} ${className}`.trim()} onSubmit={handleSubmit}>
       <label>
         Word or Phrase
         <input name="wordOrPhrase" value={formData.wordOrPhrase} onChange={handleChange} required />
@@ -115,7 +123,9 @@ function FlashcardForm({ initialData, decks = [], onSubmit, submitLabel = 'Save 
         </select>
       </label>
 
-      <button type="submit">{submitLabel}</button>
+      <button type="submit" className={submitClassName}>
+        {submitLabel}
+      </button>
     </form>
   );
 }

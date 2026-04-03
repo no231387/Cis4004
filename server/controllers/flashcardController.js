@@ -85,13 +85,25 @@ const getOwnerId = (record) => record.owner?._id || record.owner;
 
 const ownsRecord = (record, user) => isAdmin(user) || String(getOwnerId(record)) === String(user._id);
 
-const buildFilters = ({ language, category, proficiency, deck }) => {
+const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const buildFilters = ({ language, category, proficiency, deck, search }) => {
   const filters = {};
 
   if (language) filters.language = language;
   if (category) filters.category = category;
   if (deck) filters.deck = deck;
   if (proficiency) filters.proficiency = Number(proficiency);
+  if (search) {
+    const pattern = new RegExp(escapeRegex(normalizeText(search)), 'i');
+    filters.$or = [
+      { wordOrPhrase: pattern },
+      { translation: pattern },
+      { language: pattern },
+      { category: pattern },
+      { exampleSentence: pattern }
+    ];
+  }
 
   return filters;
 };

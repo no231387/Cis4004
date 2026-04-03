@@ -10,6 +10,16 @@ function FilterBar({ filters, onChange, onReset }) {
 
       <div className="filter-grid">
         <label>
+          Search
+          <input
+            name="search"
+            value={filters.search}
+            onChange={onChange}
+            placeholder="Search word, translation, language, or example"
+          />
+        </label>
+
+        <label>
           Language
           <input name="language" value={filters.language} onChange={onChange} placeholder="e.g., Spanish" />
         </label>
