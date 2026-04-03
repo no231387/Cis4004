@@ -78,12 +78,15 @@ const parseProficiency = (value) => {
 const isAdmin = (user) => user?.role === 'admin';
 
 const buildAccessFilter = (user) => (isAdmin(user) ? {} : { owner: user._id });
+const buildOwnedFilter = (user) => ({ owner: user._id });
+const buildCommunityFilter = (user) => ({ owner: { $ne: user._id } });
 
 const mergeFilters = (...filters) => Object.assign({}, ...filters);
 
 const getOwnerId = (record) => record.owner?._id || record.owner;
 
 const ownsRecord = (record, user) => isAdmin(user) || String(getOwnerId(record)) === String(user._id);
+const ownsFlashcard = (record, user) => String(getOwnerId(record)) === String(user._id);
 
 const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -257,11 +260,21 @@ const buildImportPayload = async (row, user, importOptions = {}) => {
 
 exports.getFlashcards = async (req, res) => {
   try {
-    const filters = mergeFilters(buildAccessFilter(req.user), buildFilters(req.query));
+    const filters = mergeFilters(buildOwnedFilter(req.user), buildFilters(req.query));
     const flashcards = await Flashcard.find(filters).populate(FLASHCARD_POPULATION).sort({ createdAt: -1 });
     res.status(200).json(flashcards);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch flashcards.', error: error.message });
+  }
+};
+
+exports.getCommunityFlashcards = async (req, res) => {
+  try {
+    const filters = mergeFilters(buildCommunityFilter(req.user), buildFilters(req.query));
+    const flashcards = await Flashcard.find(filters).populate(FLASHCARD_POPULATION).sort({ createdAt: -1 });
+    res.status(200).json(flashcards);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch community flashcards.', error: error.message });
   }
 };
 
@@ -273,7 +286,7 @@ exports.getFlashcardById = async (req, res) => {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
 
-    if (!ownsRecord(flashcard, req.user)) {
+    if (!ownsFlashcard(flashcard, req.user)) {
       return res.status(403).json({ message: 'You do not have access to this flashcard.' });
     }
 
@@ -303,7 +316,7 @@ exports.updateFlashcard = async (req, res) => {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
 
-    if (!ownsRecord(flashcard, req.user)) {
+    if (!ownsFlashcard(flashcard, req.user)) {
       return res.status(403).json({ message: 'You can only update your own flashcards.' });
     }
 
@@ -335,7 +348,7 @@ exports.deleteFlashcard = async (req, res) => {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
 
-    if (!ownsRecord(flashcard, req.user)) {
+    if (!ownsFlashcard(flashcard, req.user)) {
       return res.status(403).json({ message: 'You can only delete your own flashcards.' });
     }
 
@@ -356,7 +369,7 @@ exports.updateProficiency = async (req, res) => {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
 
-    if (!ownsRecord(flashcard, req.user)) {
+    if (!ownsFlashcard(flashcard, req.user)) {
       return res.status(403).json({ message: 'You can only update your own flashcards.' });
     }
 
@@ -378,7 +391,7 @@ exports.resetFlashcardProficiency = async (req, res) => {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
 
-    if (!ownsRecord(flashcard, req.user)) {
+    if (!ownsFlashcard(flashcard, req.user)) {
       return res.status(403).json({ message: 'You can only reset proficiency for your own flashcards.' });
     }
 
@@ -408,7 +421,7 @@ exports.reviewFlashcard = async (req, res) => {
       return res.status(404).json({ message: 'Flashcard not found.' });
     }
 
-    if (!ownsRecord(flashcard, req.user)) {
+    if (!ownsFlashcard(flashcard, req.user)) {
       return res.status(403).json({ message: 'You can only review your own flashcards.' });
     }
 
@@ -423,7 +436,7 @@ exports.reviewFlashcard = async (req, res) => {
 
 exports.getDashboardStats = async (req, res) => {
   try {
-    const accessFilter = buildAccessFilter(req.user);
+    const accessFilter = buildOwnedFilter(req.user);
     const [total, mastered, newCards] = await Promise.all([
       Flashcard.countDocuments(accessFilter),
       Flashcard.countDocuments(mergeFilters(accessFilter, { proficiency: 5 })),

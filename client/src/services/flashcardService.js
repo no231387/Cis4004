@@ -50,6 +50,7 @@ export const getStudySessions = () => api.get('/study-sessions');
 export const createStudySession = (data) => api.post('/study-sessions', data);
 export const deleteStudySession = (id) => api.delete(`/study-sessions/${id}`);
 export const getFlashcards = (params = {}) => api.get('/flashcards', { params });
+export const getCommunityFlashcards = (params = {}) => api.get('/flashcards/community', { params });
 export const getDashboardStats = () => api.get('/flashcards/stats');
 export const getFlashcard = (id) => api.get(`/flashcards/${id}`);
 export const createFlashcard = (data) => api.post('/flashcards', data);

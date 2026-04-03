@@ -11,7 +11,8 @@ const {
   reviewFlashcard,
   getDashboardStats,
   bulkImportFlashcards,
-  removeDuplicateWords
+  removeDuplicateWords,
+  getCommunityFlashcards
 } = require('../controllers/flashcardController');
 
 const router = express.Router();
@@ -19,6 +20,7 @@ const router = express.Router();
 router.use(protect);
 
 router.get('/stats', getDashboardStats);
+router.get('/community', getCommunityFlashcards);
 router.post('/import', bulkImportFlashcards);
 router.delete('/duplicates/words', removeDuplicateWords);
 router.route('/').get(getFlashcards).post(createFlashcard);

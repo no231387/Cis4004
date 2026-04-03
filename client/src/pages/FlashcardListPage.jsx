@@ -174,8 +174,8 @@ function FlashcardListPage() {
     <section className="page-section">
       <div className="card hero-card flashcards-hero">
         <div className="flashcards-hero-copy">
-          <h2>{isAdmin ? 'All Flashcards' : 'My Flashcards'}</h2>
-          <p>Search, add, and manage flashcards from one place without leaving the page.</p>
+          <h2>My Flashcards</h2>
+          <p>Search, add, and manage the flashcards saved to your own account.</p>
         </div>
         <div className="flashcards-toolbar">
           <button type="button" onClick={() => setShowAddForm((current) => !current)}>
@@ -194,9 +194,7 @@ function FlashcardListPage() {
             <div>
               <h3>Quick Add</h3>
               <p className="muted-text">
-                {isAdmin
-                  ? 'Create a new flashcard here and it will appear in the list immediately.'
-                  : 'Add a new card to your collection without leaving the flashcards tab.'}
+                Add a new card to your collection without leaving the flashcards tab.
               </p>
             </div>
             <button type="button" onClick={() => setShowAddForm((current) => !current)} className="secondary-button">

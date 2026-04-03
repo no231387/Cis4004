@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom';
 import DashboardPage from './pages/DashboardPage';
 import FlashcardListPage from './pages/FlashcardListPage';
+import CommunityFlashcardsPage from './pages/CommunityFlashcardsPage';
 import AddFlashcardPage from './pages/AddFlashcardPage';
 import DecksPage from './pages/DecksPage';
 import EditFlashcardPage from './pages/EditFlashcardPage';
@@ -143,6 +144,7 @@ function App() {
               <NavLink to="/decks">Decks</NavLink>
               <NavLink to="/official-beginner-decks">Official Beginner Decks</NavLink>
               <NavLink to="/flashcards">Flashcards</NavLink>
+              <NavLink to="/community">Community</NavLink>
               {user?.role === 'admin' && <NavLink to="/import">Import</NavLink>}
               <NavLink to="/study">Study</NavLink>
             </>
@@ -172,6 +174,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <FlashcardListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/community"
+            element={
+              <ProtectedRoute>
+                <CommunityFlashcardsPage />
               </ProtectedRoute>
             }
           />
