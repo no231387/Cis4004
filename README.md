@@ -18,16 +18,10 @@ LinguaCards is a beginner-friendly MERN flashcard app for language learning. It 
 - Proficiency tracking and reset actions
 - Dark mode toggle
 
-## Recent UX Updates
-- Flashcards page now supports live search as you type
-- Flashcards page includes an inline Quick Add flow
-- Navigation includes a profile panel with cards, decks, and study-session counts
-- Study workflow now starts from a setup screen before entering review mode
-- Home page has a simplified dashboard and quick access actions
 
 ## Setup Instructions
 
-### 1. Clone the repo
+### 1. Clone the repo(or download ZIP)
 ```bash
 git clone https://github.com/no231387/Cis4004.git
 cd Cis4004
